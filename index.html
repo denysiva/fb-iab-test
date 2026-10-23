@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Тест панелі Facebook</title>
+<style>
+  :root {
+    --bg: #f6f6f7; --card: #ffffff; --text: #1c1c1e; --muted: #6b6b70;
+    --line: #e3e3e6; --accent: #2563eb; --ok: #1f7a3d; --warn: #9a5b00;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size: 22px; line-height: 1.25; margin: 0 0 8px; }
+  h2 { font-size: 17px; margin: 0 0 8px; }
+  p { margin: 0 0 8px; }
+  ol { margin: 0; padding-left: 20px; }
+  li { margin-bottom: 6px; }
+  .muted { color: var(--muted); font-size: 14px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 16px; margin-bottom: 12px; }
+  .btn { display: block; width: 100%; padding: 14px; margin-top: 8px; border-radius: 10px;
+    border: 1px solid var(--line); background: var(--card); color: var(--text);
+    font: inherit; text-align: center; }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .hidden { display: none; }
+
+  /* Перший екран вищий за екран телефона: інакше сторінку нема як прогорнути */
+  .cover { min-height: 300vh; padding: 16px; }
+  .swipe-hint { text-align: center; font-size: 20px; font-weight: 600; color: var(--accent); padding: 24px 0; }
+
+  .status dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 14px; }
+  .status dt { color: var(--muted); }
+  .status dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .status .verdict { margin-top: 8px; font-size: 14px; font-weight: 600; }
+  .status .verdict.ok { color: var(--ok); }
+  .status .verdict.warn { color: var(--warn); }
+  .status .log { margin-top: 8px; font-size: 13px; color: var(--muted); white-space: pre-line; }
+
+  /* «Режим застосунку»: шар на весь екран, який гортається сам */
+  #app { display: none; position: fixed; inset: 0; z-index: 2147483646;
+    overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
+    background: var(--bg); padding: 16px; }
+  html.app-mode #app { display: block; }
+  /* Блокуємо прокрутку сторінки, не зсуваючи її. Не position:fixed — сторінка
+     стрибне вгору, і Facebook, найімовірніше, знову покаже свою панель */
+  html.app-mode, html.app-mode body { overflow: hidden; }
+</style>
+</head>
+<body>
+
+<main class="cover">
+  <section class="card hidden" id="chooser">
+    <h1>Тест панелі Facebook</h1>
+    <p>Обери варіант. Відкривай цю сторінку лише з додатка Facebook, не з Messenger.</p>
+    <button class="btn btn-primary" type="button" data-variant="a">Варіант A: після першого свайпу</button>
+    <button class="btn" type="button" data-variant="b">Варіант B: одразу при завантаженні</button>
+  </section>
+
+  <section class="card hidden" id="intro-a">
+    <h1>Варіант A</h1>
+    <p>Спершу подивись, чи видно вгорі X і «назад» Facebook. Зроби скриншот.</p>
+    <p>Потім проведи пальцем знизу вгору, щоб прогорнути сторінку. Режим застосунку ввімкнеться сам.</p>
+  </section>
+
+  <section class="card hidden" id="intro-b">
+    <h1>Варіант B</h1>
+    <p>Нічого не чіпай. За секунду сторінка сама прокрутиться і ввімкне режим застосунку.</p>
+  </section>
+
+  <section class="card status js-status"></section>
+
+  <div class="swipe-hint hidden" id="swipe-hint">↑ Гортай вгору</div>
+</main>
+
+<div id="app">
+  <section class="card">
+    <h1>Режим застосунку ввімкнено</h1>
+    <p class="muted" id="app-variant"></p>
+  </section>
+
+  <section class="card status js-status"></section>
+
+  <section class="card">
+    <h2>Що перевірити</h2>
+    <ol>
+      <li>Що видно вгорі: X і «назад» Facebook чи лише рядок з адресою сайту?</li>
+      <li>Погортай цей екран до кінця вниз і назад до верху. Панель Facebook повернулась?</li>
+      <li>Свайпни від лівого краю екрана праворуч. Що сталося?</li>
+      <li>Тапни по рядку з адресою вгорі. З’явився X?</li>
+    </ol>
+    <p class="muted">Після кожного кроку зроби скриншот.</p>
+  </section>
+
+  <section class="card">
+    <h2>Вміст для прокрутки</h2>
+    <p class="muted">Блоки нижче потрібні лише для того, щоб екран можна було гортати.</p>
+  </section>
+  <div id="filler"></div>
+
+  <section class="card">
+    <h2>Повторити тест</h2>
+    <button class="btn btn-primary" type="button" id="restart">Перезапустити цей варіант</button>
+    <button class="btn" type="button" id="switch"></button>
+  </section>
+</div>
+
+<script>
+(function () {
+  var root = document.documentElement;
+  var variant = new URLSearchParams(location.search).get('v');
+  var startHeight = window.innerHeight;
+  var maxHeight = startHeight;
+  var lockedAt = null;
+  var log = [];
+
+  function seconds() { return (performance.now() / 1000).toFixed(1) + ' с'; }
+
+  function note(text) {
+    log.push(seconds() + ': ' + text);
+    render();
+  }
+
+  // Звідки відкрили сторінку: у Messenger та Instagram свої браузери, тест там не показовий
+  function browserName() {
+    var ua = navigator.userAgent;
+    if (/MessengerForiOS|FBAN\/Messenger/.test(ua)) return 'Messenger (не той браузер)';
+    if (/FBAN\/FBIOS|FBAV/.test(ua)) return 'Facebook';
+    if (/Instagram/.test(ua)) return 'Instagram (не той браузер)';
+    return 'не Facebook';
+  }
+
+  function render() {
+    var h = window.innerHeight;
+    if (h > maxHeight) maxHeight = h;
+    // Якщо Facebook згортає панель, видима частина сторінки зазвичай стає вищою.
+    // Це лише підказка: головне — що видно на екрані
+    var grew = maxHeight - startHeight;
+    var verdict = grew >= 30
+      ? '<div class="verdict ok">Екран став вищим на ' + grew + ' px: схоже, Facebook згорнув панель</div>'
+      : '<div class="verdict warn">Висота екрана не змінилась</div>';
+    var html =
+      '<dl>' +
+      '<dt>Варіант</dt><dd>' + (variant ? variant.toUpperCase() : 'не обрано') + '</dd>' +
+      '<dt>Браузер</dt><dd>' + browserName() + '</dd>' +
+      '<dt>Висота при відкритті</dt><dd>' + startHeight + ' px</dd>' +
+      '<dt>Висота зараз</dt><dd>' + h + ' px</dd>' +
+      '<dt>Найбільша висота</dt><dd>' + maxHeight + ' px</dd>' +
+      '<dt>Сторінку прокручено</dt><dd>' + (lockedAt === null ? Math.round(window.scrollY) : lockedAt) + ' px</dd>' +
+      '<dt>Кроків в історії</dt><dd>' + history.length + '</dd>' +
+      '</dl>' + verdict +
+      (log.length ? '<div class="log">' + log.join('\n') + '</div>' : '');
+    document.querySelectorAll('.js-status').forEach(function (el) { el.innerHTML = html; });
+  }
+
+  function enableAppMode(reason) {
+    if (root.classList.contains('app-mode')) return;
+    lockedAt = Math.round(window.scrollY);
+    root.classList.add('app-mode');
+    note('режим застосунку ввімкнено (' + reason + '), сторінку зафіксовано на ' + lockedAt + ' px');
+  }
+
+  // location.replace не додає крок в історію, тож свайп назад працює так само, як після реклами
+  function openVariant(v) { location.replace(location.pathname + '?v=' + v); }
+
+  document.querySelectorAll('[data-variant]').forEach(function (btn) {
+    btn.addEventListener('click', function () { openVariant(btn.dataset.variant); });
+  });
+
+  // Наповнювач, щоб шар #app було що гортати
+  var filler = document.getElementById('filler');
+  for (var i = 1; i <= 10; i++) {
+    var block = document.createElement('section');
+    block.className = 'card';
+    block.innerHTML = '<h2>Блок ' + i + ' з 10</h2><p class="muted">Звичайний текст лендінгу. ' +
+      'Гортай далі, щоб перевірити, що прокручується лише цей шар, а панель Facebook не повертається.</p>';
+    filler.appendChild(block);
+  }
+
+  window.addEventListener('resize', render);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', render);
+
+  if (variant === 'a') {
+    document.getElementById('intro-a').classList.remove('hidden');
+    document.getElementById('swipe-hint').classList.remove('hidden');
+    // Варіант A: чекаємо, поки людина сама прогорне сторінку на 40 px
+    window.addEventListener('scroll', function onFirstScroll() {
+      render();
+      if (window.scrollY < 40) return;
+      window.removeEventListener('scroll', onFirstScroll);
+      enableAppMode('після свайпу');
+    }, { passive: true });
+  } else if (variant === 'b') {
+    document.getElementById('intro-b').classList.remove('hidden');
+    // Варіант B: сторінка прокручується сама, без дій людини, і одразу фіксується
+    window.addEventListener('load', function () {
+      setTimeout(function () {
+        window.scrollTo({ top: 200, behavior: 'smooth' });
+        note('сторінка сама прокрутилась на 200 px');
+      }, 300);
+      setTimeout(function () { enableAppMode('автоматично'); }, 1300);
+    });
+  } else {
+    document.getElementById('chooser').classList.remove('hidden');
+  }
+
+  if (variant === 'a' || variant === 'b') {
+    var other = variant === 'a' ? 'b' : 'a';
+    document.getElementById('app-variant').textContent = variant === 'a'
+      ? 'Варіант A: після першого свайпу'
+      : 'Варіант B: одразу при завантаженні';
+    var switchBtn = document.getElementById('switch');
+    switchBtn.textContent = 'Перейти на варіант ' + other.toUpperCase();
+    switchBtn.addEventListener('click', function () { openVariant(other); });
+    document.getElementById('restart').addEventListener('click', function () { openVariant(variant); });
+  }
+
+  render();
+})();
+</script>
+</body>
+</html>
