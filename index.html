@@ -28,8 +28,12 @@
   .hidden { display: none; }
 
   /* Перший екран вищий за екран телефона: інакше сторінку нема як прогорнути */
-  .cover { min-height: 300vh; padding: 16px; }
+  .cover { position: relative; min-height: 300vh; padding: 16px; }
   .swipe-hint { text-align: center; font-size: 20px; font-weight: 600; color: var(--accent); padding: 24px 0; }
+  /* Цілі для варіантів B3 (якір) і B5 (поле вводу) нижче першого екрана */
+  #anchor { position: absolute; top: 900px; left: 0; height: 1px; width: 1px; }
+  .probe { position: absolute; top: 1000px; left: 16px; right: 16px; width: calc(100% - 32px);
+    padding: 12px; border: 1px solid var(--line); border-radius: 10px; font: inherit; font-size: 16px; }
 
   .status dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; font-size: 14px; }
   .status dt { color: var(--muted); }
@@ -55,8 +59,7 @@
   <section class="card hidden" id="chooser">
     <h1>Тест панелі Facebook</h1>
     <p>Обери варіант. Відкривай цю сторінку лише з додатка Facebook, не з Messenger.</p>
-    <button class="btn btn-primary" type="button" data-variant="a">Варіант A: після першого свайпу</button>
-    <button class="btn" type="button" data-variant="b">Варіант B: одразу при завантаженні</button>
+    <div id="chooser-buttons"></div>
   </section>
 
   <section class="card hidden" id="intro-a">
@@ -66,13 +69,16 @@
   </section>
 
   <section class="card hidden" id="intro-b">
-    <h1>Варіант B</h1>
-    <p>Нічого не чіпай. За секунду сторінка сама прокрутиться і ввімкне режим застосунку.</p>
+    <h1 id="intro-b-title"></h1>
+    <p>Нічого не чіпай. Через секунду сторінка сама прокрутиться, а ще через півтори ввімкне режим застосунку.</p>
   </section>
 
   <section class="card status js-status"></section>
 
   <div class="swipe-hint hidden" id="swipe-hint">↑ Гортай вгору</div>
+
+  <div id="anchor"></div>
+  <input class="probe" id="probe-input" type="text" placeholder="Поле для варіанта B5" aria-label="Поле для варіанта B5">
 </main>
 
 <div id="app">
@@ -116,6 +122,44 @@
   var lockedAt = null;
   var log = [];
 
+  // Варіанти тесту. B — плавна прокрутка, вже перевірена на iPhone 24.10: панель не сховалась.
+  // B1–B5 — інші способи прокрутити сторінку без пальця людини
+  var VARIANTS = {
+    a: 'після першого свайпу',
+    b: 'плавна прокрутка на 200 px',
+    b1: 'миттєва прокрутка на 1 px',
+    b2: 'миттєвий стрибок на 600 px',
+    b3: 'перехід до якоря нижче екрана',
+    b4: 'імітація свайпу з гальмуванням',
+    b5: 'фокус на полі вводу нижче екрана'
+  };
+  // Порядок у виборі й для кнопки «Наступний варіант»; B не показуємо, бо його вже перевірено
+  var ORDER = ['a', 'b1', 'b2', 'b3', 'b4', 'b5'];
+
+  // Як кожен варіант B прокручує сторінку
+  var AUTO_SCROLL = {
+    b: function () { window.scrollTo({ top: 200, behavior: 'smooth' }); },
+    b1: function () { window.scrollTo(0, 1); },
+    b2: function () { window.scrollTo(0, 600); },
+    // location.replace з якорем прокручує до елемента і не додає крок в історію
+    b3: function () { location.replace('#anchor'); },
+    // Кадр за кадром, з гальмуванням у кінці, як після справжнього свайпу
+    b4: function () {
+      var start = performance.now();
+      var duration = 600;
+      var distance = 400;
+      requestAnimationFrame(function step(now) {
+        var t = Math.min(1, (now - start) / duration);
+        window.scrollTo(0, Math.round(distance * (1 - Math.pow(1 - t, 3))));
+        if (t < 1) requestAnimationFrame(step);
+      });
+    },
+    // Браузер сам прокручує сторінку до поля, яке отримало фокус
+    b5: function () { document.getElementById('probe-input').focus(); }
+  };
+
+  function label(v) { return 'Варіант ' + v.toUpperCase() + ': ' + VARIANTS[v]; }
+
   function seconds() { return (performance.now() / 1000).toFixed(1) + ' с'; }
 
   function note(text) {
@@ -143,7 +187,7 @@
       : '<div class="verdict warn">Висота екрана не змінилась</div>';
     var html =
       '<dl>' +
-      '<dt>Варіант</dt><dd>' + (variant ? variant.toUpperCase() : 'не обрано') + '</dd>' +
+      '<dt>Варіант</dt><dd>' + (VARIANTS[variant] ? variant.toUpperCase() : 'не обрано') + '</dd>' +
       '<dt>Браузер</dt><dd>' + browserName() + '</dd>' +
       '<dt>Висота при відкритті</dt><dd>' + startHeight + ' px</dd>' +
       '<dt>Висота зараз</dt><dd>' + h + ' px</dd>' +
@@ -165,8 +209,14 @@
   // location.replace не додає крок в історію, тож свайп назад працює так само, як після реклами
   function openVariant(v) { location.replace(location.pathname + '?v=' + v); }
 
-  document.querySelectorAll('[data-variant]').forEach(function (btn) {
-    btn.addEventListener('click', function () { openVariant(btn.dataset.variant); });
+  var chooserButtons = document.getElementById('chooser-buttons');
+  ORDER.forEach(function (v, i) {
+    var btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = i === 0 ? 'btn btn-primary' : 'btn';
+    btn.textContent = label(v);
+    btn.addEventListener('click', function () { openVariant(v); });
+    chooserButtons.appendChild(btn);
   });
 
   // Наповнювач, щоб шар #app було що гортати
@@ -192,28 +242,29 @@
       window.removeEventListener('scroll', onFirstScroll);
       enableAppMode('після свайпу');
     }, { passive: true });
-  } else if (variant === 'b') {
+  } else if (AUTO_SCROLL[variant]) {
     document.getElementById('intro-b').classList.remove('hidden');
-    // Варіант B: сторінка прокручується сама, без дій людини, і одразу фіксується
+    document.getElementById('intro-b-title').textContent = label(variant);
+    // Варіанти B: сторінка прокручується сама, без дій людини, і потім фіксується.
+    // Секунда паузи — на випадок, якщо Facebook ігнорує прокрутку під час завантаження
     window.addEventListener('load', function () {
       setTimeout(function () {
-        window.scrollTo({ top: 200, behavior: 'smooth' });
-        note('сторінка сама прокрутилась на 200 px');
-      }, 300);
-      setTimeout(function () { enableAppMode('автоматично'); }, 1300);
+        AUTO_SCROLL[variant]();
+        note(VARIANTS[variant]);
+      }, 1000);
+      setTimeout(function () { enableAppMode('автоматично'); }, 2500);
     });
   } else {
+    variant = null;
     document.getElementById('chooser').classList.remove('hidden');
   }
 
-  if (variant === 'a' || variant === 'b') {
-    var other = variant === 'a' ? 'b' : 'a';
-    document.getElementById('app-variant').textContent = variant === 'a'
-      ? 'Варіант A: після першого свайпу'
-      : 'Варіант B: одразу при завантаженні';
+  if (variant) {
+    var next = ORDER[(ORDER.indexOf(variant) + 1) % ORDER.length];
+    document.getElementById('app-variant').textContent = label(variant);
     var switchBtn = document.getElementById('switch');
-    switchBtn.textContent = 'Перейти на варіант ' + other.toUpperCase();
-    switchBtn.addEventListener('click', function () { openVariant(other); });
+    switchBtn.textContent = 'Наступний: ' + label(next);
+    switchBtn.addEventListener('click', function () { openVariant(next); });
     document.getElementById('restart').addEventListener('click', function () { openVariant(variant); });
   }
 
