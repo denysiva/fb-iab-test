@@ -68,6 +68,12 @@
     <p>Потім проведи пальцем знизу вгору, щоб прогорнути сторінку. Режим застосунку ввімкнеться сам.</p>
   </section>
 
+  <section class="card hidden" id="intro-c">
+    <h1>Варіант C</h1>
+    <p>Пальцем сторінку не гортай. Натисни кнопку: сторінка сама прокрутиться, а через півтори секунди ввімкне режим застосунку.</p>
+    <button class="btn btn-primary" type="button" id="start-button">Почати</button>
+  </section>
+
   <section class="card hidden" id="intro-b">
     <h1 id="intro-b-title"></h1>
     <p>Нічого не чіпай. Через секунду сторінка сама прокрутиться, а ще через півтори ввімкне режим застосунку.</p>
@@ -126,6 +132,7 @@
   // B1–B5 — інші способи прокрутити сторінку без пальця людини
   var VARIANTS = {
     a: 'після першого свайпу',
+    c: 'після натискання кнопки',
     b: 'плавна прокрутка на 200 px',
     b1: 'миттєва прокрутка на 1 px',
     b2: 'миттєвий стрибок на 600 px',
@@ -134,7 +141,7 @@
     b5: 'фокус на полі вводу нижче екрана'
   };
   // Порядок у виборі й для кнопки «Наступний варіант»; B не показуємо, бо його вже перевірено
-  var ORDER = ['a', 'b1', 'b2', 'b3', 'b4', 'b5'];
+  var ORDER = ['a', 'c', 'b1', 'b2', 'b3', 'b4', 'b5'];
 
   // Як кожен варіант B прокручує сторінку
   var AUTO_SCROLL = {
@@ -242,6 +249,14 @@
       window.removeEventListener('scroll', onFirstScroll);
       enableAppMode('після свайпу');
     }, { passive: true });
+  } else if (variant === 'c') {
+    document.getElementById('intro-c').classList.remove('hidden');
+    // Варіант C: людина натискає кнопку, а прокручує сторінку сайт
+    document.getElementById('start-button').addEventListener('click', function () {
+      window.scrollTo({ top: 300, behavior: 'smooth' });
+      note('кнопку натиснуто, сторінка сама прокрутилась на 300 px');
+      setTimeout(function () { enableAppMode('після натискання кнопки'); }, 1500);
+    });
   } else if (AUTO_SCROLL[variant]) {
     document.getElementById('intro-b').classList.remove('hidden');
     document.getElementById('intro-b-title').textContent = label(variant);
