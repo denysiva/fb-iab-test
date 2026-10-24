@@ -43,6 +43,19 @@
   .status .verdict.warn { color: var(--warn); }
   .status .log { margin-top: 8px; font-size: 13px; color: var(--muted); white-space: pre-line; }
 
+  /* Варіант D: копія кошика UpsellGenie з threadythings. Шапка і низ стоять,
+     гортається лише список посередині */
+  .cart-overlay { display: none; position: fixed; inset: 0; z-index: 2147483646; background: rgba(0, 0, 0, .4); }
+  html.cart-open .cart-overlay { display: block; }
+  html.cart-open, html.cart-open body { overflow: hidden; }
+  .cart { position: absolute; inset: 0; display: flex; flex-direction: column; background: var(--card); }
+  .cart-head { display: flex; justify-content: space-between; align-items: center;
+    padding: 16px; border-bottom: 1px solid var(--line); font-size: 20px; font-weight: 600; }
+  .cart-close { padding: 4px 8px; border: 0; background: none; color: var(--text); font-size: 24px; line-height: 1; }
+  .cart-list { flex: 1; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 16px; }
+  .cart-foot { padding: 16px; border-top: 1px solid var(--line); }
+  .cart-item { padding: 12px 0; border-bottom: 1px solid var(--line); }
+
   /* «Режим застосунку»: шар на весь екран, який гортається сам */
   #app { display: none; position: fixed; inset: 0; z-index: 2147483646;
     overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
@@ -55,7 +68,7 @@
 </head>
 <body>
 
-<main class="cover">
+<main class="cover" data-zone="сторінка">
   <section class="card hidden" id="chooser">
     <h1>Тест панелі Facebook</h1>
     <p>Обери варіант. Відкривай цю сторінку лише з додатка Facebook, не з Messenger.</p>
@@ -74,6 +87,12 @@
     <button class="btn btn-primary" type="button" id="start-button">Почати</button>
   </section>
 
+  <section class="card hidden" id="intro-d">
+    <h1>Варіант D</h1>
+    <p>Копія кошика з threadythings. Пальцем сторінку не гортай. Натисни кнопку, відкриється кошик. Що робити далі, написано в ньому.</p>
+    <button class="btn btn-primary" type="button" id="cart-button">Додати в кошик</button>
+  </section>
+
   <section class="card hidden" id="intro-b">
     <h1 id="intro-b-title"></h1>
     <p>Нічого не чіпай. Через секунду сторінка сама прокрутиться, а ще через півтори ввімкне режим застосунку.</p>
@@ -87,7 +106,33 @@
   <input class="probe" id="probe-input" type="text" placeholder="Поле для варіанта B5" aria-label="Поле для варіанта B5">
 </main>
 
-<div id="app">
+<div class="cart-overlay">
+  <aside class="cart">
+    <div class="cart-head" data-zone="шапка кошика">
+      <span>Твій кошик</span>
+      <button class="cart-close" type="button" id="cart-close" aria-label="Закрити кошик">✕</button>
+    </div>
+    <div class="cart-list" data-zone="список кошика">
+      <section class="card">
+        <h2>Що робити</h2>
+        <ol>
+          <li>Одразу подивись, чи видно X і «назад» Facebook. Зроби скриншот.</li>
+          <li>Проведи пальцем вгору по шапці кошика, де «Твій кошик». Панель зникла?</li>
+          <li>Проведи пальцем вгору по цьому списку. Панель зникла?</li>
+          <li>Проведи пальцем вгору по низу кошика, біля кнопки. Панель зникла?</li>
+        </ol>
+        <p class="muted">Після кожного кроку зроби скриншот. Журнал нижче записує кожен свайп і кожну зміну висоти екрана.</p>
+      </section>
+      <section class="card status js-status"></section>
+      <div id="cart-items"></div>
+    </div>
+    <div class="cart-foot" data-zone="низ кошика">
+      <button class="btn btn-primary" type="button">Оформити замовлення</button>
+    </div>
+  </aside>
+</div>
+
+<div id="app" data-zone="шар режиму застосунку">
   <section class="card">
     <h1>Режим застосунку ввімкнено</h1>
     <p class="muted" id="app-variant"></p>
@@ -133,6 +178,7 @@
   var VARIANTS = {
     a: 'після першого свайпу',
     c: 'після натискання кнопки',
+    d: 'як кошик threadythings',
     b: 'плавна прокрутка на 200 px',
     b1: 'миттєва прокрутка на 1 px',
     b2: 'миттєвий стрибок на 600 px',
@@ -141,7 +187,7 @@
     b5: 'фокус на полі вводу нижче екрана'
   };
   // Порядок у виборі й для кнопки «Наступний варіант»; B не показуємо, бо його вже перевірено
-  var ORDER = ['a', 'c', 'b1', 'b2', 'b3', 'b4', 'b5'];
+  var ORDER = ['a', 'c', 'd', 'b1', 'b2', 'b3', 'b4', 'b5'];
 
   // Як кожен варіант B прокручує сторінку
   var AUTO_SCROLL = {
@@ -236,8 +282,36 @@
     filler.appendChild(block);
   }
 
-  window.addEventListener('resize', render);
-  if (window.visualViewport) window.visualViewport.addEventListener('resize', render);
+  // Журнал змін висоти екрана: коли Facebook згортає панель, висота зазвичай росте.
+  // Разом із журналом свайпів видно, після якого жесту це сталося
+  var loggedHeight = startHeight;
+  function onResize() {
+    var h = window.innerHeight;
+    if (Math.abs(h - loggedHeight) >= 20) {
+      note('висота екрана ' + loggedHeight + ' → ' + h + ' px');
+      loggedHeight = h;
+    } else {
+      render();
+    }
+  }
+  window.addEventListener('resize', onResize);
+  if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
+
+  // Журнал свайпів: по якій частині екрана провели пальцем і в який бік
+  var touchStartY = null;
+  var touchZone = '';
+  document.addEventListener('touchstart', function (e) {
+    touchStartY = e.touches[0].clientY;
+    var zone = e.target.closest && e.target.closest('[data-zone]');
+    touchZone = zone ? zone.dataset.zone : 'інше';
+  }, { passive: true, capture: true });
+  document.addEventListener('touchend', function (e) {
+    if (touchStartY === null) return;
+    var dy = Math.round(e.changedTouches[0].clientY - touchStartY);
+    touchStartY = null;
+    if (Math.abs(dy) < 15) return;
+    note('свайп по «' + touchZone + '» ' + (dy < 0 ? 'вгору' : 'вниз') + ' на ' + Math.abs(dy) + ' px');
+  }, { passive: true, capture: true });
 
   if (variant === 'a') {
     document.getElementById('intro-a').classList.remove('hidden');
@@ -256,6 +330,27 @@
       window.scrollTo({ top: 300, behavior: 'smooth' });
       note('кнопку натиснуто, сторінка сама прокрутилась на 300 px');
       setTimeout(function () { enableAppMode('після натискання кнопки'); }, 1500);
+    });
+  } else if (variant === 'd') {
+    document.getElementById('intro-d').classList.remove('hidden');
+    var cartItems = document.getElementById('cart-items');
+    for (var k = 1; k <= 8; k++) {
+      var item = document.createElement('div');
+      item.className = 'cart-item';
+      item.textContent = 'Товар ' + k + ' з 8';
+      cartItems.appendChild(item);
+    }
+    // Варіант D: як кошик threadythings — сайт нічого не прокручує, лише накриває
+    // екран кошиком і блокує прокрутку сторінки на тому місці, де вона була
+    document.getElementById('cart-button').addEventListener('click', function () {
+      lockedAt = Math.round(window.scrollY);
+      root.classList.add('cart-open');
+      note('кошик відкрито, сторінку зафіксовано на ' + lockedAt + ' px без прокрутки');
+    });
+    document.getElementById('cart-close').addEventListener('click', function () {
+      root.classList.remove('cart-open');
+      lockedAt = null;
+      note('кошик закрито');
     });
   } else if (AUTO_SCROLL[variant]) {
     document.getElementById('intro-b').classList.remove('hidden');
