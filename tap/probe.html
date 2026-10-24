@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="uk" data-iab-mode="tap"><head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Ізольований тест NEXT v6</title>
+  <link rel="stylesheet" href="./files/landing.css">
+  <style>main{padding:100px 24px 30px}h1{font-size:24px}p{max-width:32em;margin:20px 0}</style>
+  <script src="./files/meta-iab.js" defer></script>
+</head><body>
+  <main id="landing-shell" data-step="probe">
+    <h1>Звичайне натискання NEXT</h1>
+    <p>Окрема перевірка fullscreen без квіза, зображень, зовнішніх скриптів і програмної прокрутки. Натисни один раз, не утримуючи кнопку.</p>
+    <button type="button" class="buttons__item" id="probe-next">NEXT</button>
+  </main>
+  <button type="button" id="iab-release" aria-label="Exit fullscreen" hidden>⌄</button>
+  <script>
+    document.querySelector('#probe-next').addEventListener('click', event => window.landingPresentation?.beforeNext(event));
+  </script>
+</body></html>
